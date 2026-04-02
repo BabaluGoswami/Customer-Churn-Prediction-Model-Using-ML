@@ -132,14 +132,22 @@ else:
         for col in ['Partner','Dependents','PhoneService','PaperlessBilling']:
             df_input[col] = df_input[col].map({'Yes':1,'No':0})
 
-        # One hot
-        df_input = pd.get_dummies(df_input)
+        # One hot encoding
+df_input = pd.get_dummies(df_input)
 
-        # -------- FIX: column mismatch --------
-        df_input = df_input.reindex(columns=columns, fill_value=0)
+# 🔥 STEP 1: Missing columns add karo
+for col in columns:
+    if col not in df_input.columns:
+        df_input[col] = 0
 
-        # Scale
-        scaled = scaler.transform(df_input)
+# 🔥 STEP 2: Extra columns hatao
+df_input = df_input[columns]
+
+# 🔥 STEP 3: Ensure numeric (VERY IMPORTANT)
+df_input = df_input.astype(float)
+
+# 🔥 STEP 4: Scale safely
+scaled = scaler.transform(df_input)
 
         # Predict
         pred = model.predict(scaled)[0]
