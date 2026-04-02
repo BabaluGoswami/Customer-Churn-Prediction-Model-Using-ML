@@ -4,16 +4,17 @@ import pickle
 import matplotlib.pyplot as plt
 import os
 
-# -------------------- Safe Path Setup --------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+st.set_page_config(page_title="Customer Churn Dashboard", layout="wide")
 
-# -------------------- Load Model & Data --------------------
+# -------------------- Load Model Safely --------------------
+BASE_DIR = os.path.dirname(__file__)
+
 model = pickle.load(open(os.path.join(BASE_DIR, "model.pkl"), "rb"))
 scaler = pickle.load(open(os.path.join(BASE_DIR, "scaler.pkl"), "rb"))
 columns = pickle.load(open(os.path.join(BASE_DIR, "columns.pkl"), "rb"))
+
 final_results = pd.read_csv(os.path.join(BASE_DIR, "Final_Results.csv"))
 
-st.set_page_config(page_title="Customer Churn Dashboard", layout="wide")
 st.title("📊 Customer Churn Prediction & Dashboard")
 
 # -------------------- Sidebar --------------------
@@ -28,79 +29,77 @@ if demo_mode == "Dashboard (Existing Customers)":
 
     st.header("📈 Customer Churn Dashboard")
 
-    total_customers = len(final_results)
-    churn_customers = int(final_results["Predicted_Churn"].sum())
-    stayed_customers = total_customers - churn_customers
+    total = len(final_results)
+    churn = final_results["Predicted_Churn"].sum()
+    stayed = total - churn
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Customers", total_customers)
-    col2.metric("Churn Customers", churn_customers)
-    col3.metric("Stayed Customers", stayed_customers)
+    col1.metric("Total Customers", total)
+    col2.metric("Churn Customers", churn)
+    col3.metric("Stayed Customers", stayed)
 
-    # -------- Pie Chart (fixed size) --------
-    st.subheader("📊 Customer Distribution")
+    st.subheader("📊 Distribution")
+
     fig, ax = plt.subplots(figsize=(4,4))
     ax.pie(
-        [churn_customers, stayed_customers],
-        labels=["Churn","Stayed"],
+        [churn, stayed],
+        labels=["Churn", "Stayed"],
         autopct="%1.1f%%",
         startangle=90
     )
-    ax.set_title("Churn vs Stayed")
     st.pyplot(fig)
 
-    # -------- Accuracy --------
-    correct = sum(final_results["Predicted_Churn"] == final_results["Actual_Churn"])
-    accuracy = correct / total_customers
+    acc = (final_results["Predicted_Churn"] == final_results["Actual_Churn"]).mean()
+    st.success(f"Model Accuracy: {acc*100:.2f}%")
 
-    st.markdown(
-        f"### 🎯 Model Accuracy: `{accuracy*100:.2f}%`"
-    )
-
-    # -------- Data View --------
     st.subheader("📄 Customer Data")
 
     option = st.radio("View:", ["All", "Churn", "Stayed"])
 
-    if option == "All":
-        df_display = final_results.copy()
-    elif option == "Churn":
-        df_display = final_results[final_results["Predicted_Churn"] == 1]
+    if option == "Churn":
+        df_show = final_results[final_results["Predicted_Churn"] == 1]
+    elif option == "Stayed":
+        df_show = final_results[final_results["Predicted_Churn"] == 0]
     else:
-        df_display = final_results[final_results["Predicted_Churn"] == 0]
+        df_show = final_results
 
-    df_display = df_display.reset_index(drop=True)
-    df_display.index += 1
+    df_show = df_show.copy()
+    df_show.index = range(1, len(df_show) + 1)
+    st.dataframe(df_show)
 
-    st.dataframe(df_display)
-
-# ==================== INDIVIDUAL ====================
+# ==================== PREDICTION ====================
 else:
 
-    st.header("🤖 Predict Individual Customer")
+    st.header("🤖 Predict Customer Churn")
 
     gender = st.selectbox("Gender", ["Male", "Female"])
-    senior = st.selectbox("Senior Citizen", [0,1])
+    senior = st.selectbox("Senior Citizen", [0, 1])
     partner = st.selectbox("Partner", ["Yes", "No"])
     dependents = st.selectbox("Dependents", ["Yes", "No"])
     tenure = st.slider("Tenure", 0, 72)
+
     phone = st.selectbox("Phone Service", ["Yes", "No"])
     multiple = st.selectbox("Multiple Lines", ["Yes", "No", "No phone service"])
     internet = st.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
+
     online_sec = st.selectbox("Online Security", ["Yes", "No", "No internet service"])
     backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"])
     device = st.selectbox("Device Protection", ["Yes", "No", "No internet service"])
     tech = st.selectbox("Tech Support", ["Yes", "No", "No internet service"])
+
     tv = st.selectbox("Streaming TV", ["Yes", "No", "No internet service"])
     movies = st.selectbox("Streaming Movies", ["Yes", "No", "No internet service"])
+
     contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
     paperless = st.selectbox("Paperless Billing", ["Yes", "No"])
+
     payment = st.selectbox("Payment Method", [
         "Electronic check", "Mailed check",
         "Bank transfer (automatic)", "Credit card (automatic)"
     ])
+
     monthly = st.number_input("Monthly Charges", 0.0, 1000.0, 50.0)
-    total = st.number_input("Total Charges", 0.0, 5000.0, 100.0)
+    total_charges = st.number_input("Total Charges", 0.0, 5000.0, 100.0)
 
     if st.button("Predict"):
 
@@ -123,31 +122,29 @@ else:
             'PaperlessBilling': paperless,
             'PaymentMethod': payment,
             'MonthlyCharges': monthly,
-            'TotalCharges': total
+            'TotalCharges': total_charges
         }
 
         df_input = pd.DataFrame([data])
 
-        # Yes/No encoding
-        for col in ['Partner','Dependents','PhoneService','PaperlessBilling']:
+        # Yes/No convert
+        yes_no_cols = ['Partner','Dependents','PhoneService','PaperlessBilling']
+        for col in yes_no_cols:
             df_input[col] = df_input[col].map({'Yes':1,'No':0})
 
-        # One hot encoding
-df_input = pd.get_dummies(df_input)
+        # One-hot
+        df_input = pd.get_dummies(df_input)
 
-# 🔥 STEP 1: Missing columns add karo
-for col in columns:
-    if col not in df_input.columns:
-        df_input[col] = 0
+        # 🔥 FIX (IMPORTANT)
+        for col in columns:
+            if col not in df_input.columns:
+                df_input[col] = 0
 
-# 🔥 STEP 2: Extra columns hatao
-df_input = df_input[columns]
+        df_input = df_input[columns]
+        df_input = df_input.astype(float)
 
-# 🔥 STEP 3: Ensure numeric (VERY IMPORTANT)
-df_input = df_input.astype(float)
-
-# 🔥 STEP 4: Scale safely
-scaled = scaler.transform(df_input)
+        # Scale
+        scaled = scaler.transform(df_input)
 
         # Predict
         pred = model.predict(scaled)[0]
@@ -161,8 +158,7 @@ scaled = scaler.transform(df_input)
         else:
             risk = "Low Risk 🟢"
 
-        # Result
-        st.subheader("✅ Result")
+        st.subheader("Result")
 
         if pred == 1:
             st.error(f"Churn: YES ❌ | {risk}")
@@ -170,12 +166,3 @@ scaled = scaler.transform(df_input)
             st.success(f"Churn: NO ✅ | {risk}")
 
         st.write(f"Probability: {prob:.2f}")
-
-        # Recommendation
-        st.subheader("💡 Recommendation")
-        if prob > 0.7:
-            st.write("Give discount / call customer")
-        elif prob > 0.4:
-            st.write("Send offers")
-        else:
-            st.write("No action needed")
